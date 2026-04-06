@@ -111,42 +111,38 @@ class StarlinkCombinedCard extends HTMLElement {
       return `${window.location.origin}${base}/combined`;
     }
 
-    // 2. Auto-detect via the hassio supervisor info endpoint
-    //    hass.callApi() sends the auth token automatically and returns
-    //    the parsed JSON response body.
+    // 2. Auto-detect via the supervisor WebSocket API.
+    //    Using hass.connection.sendMessagePromise with type "supervisor/api" avoids
+    //    the 401 that the REST proxy (/api/hassio/...) throws for non-admin tokens.
+    let result;
     try {
-      const result = await this._hass.callApi(
-        'GET',
-        `hassio/addons/${ADDON_SLUG}/info`,
-      );
-
-      // The supervisor wraps its response: { result: "ok", data: { ingress_url: "/api/hassio_ingress/<token>/" } }
-      // hass.callApi unwraps one level, so result may already be the data object.
-      const ingressPath =
-        result?.data?.ingress_url ??   // if callApi returns the full envelope
-        result?.ingress_url;           // if callApi returns the unwrapped data
-
-      if (!ingressPath) {
-        throw new Error(
-          `Could not read ingress_url from add-on info. ` +
-          `Set 'ingress_path' manually in your card config.`
-        );
-      }
-
-      // ingressPath is like "/api/hassio_ingress/abc123/"
-      // window.location.origin is already the correct base whether local or Nabu Casa.
-      return `${window.location.origin}${ingressPath.replace(/\/$/, '')}/combined`;
+      result = await this._hass.connection.sendMessagePromise({
+        type: 'supervisor/api',
+        endpoint: `/addons/${ADDON_SLUG}/info`,
+        method: 'get',
+      });
     } catch (err) {
-      // Re-throw with friendlier context.
-      // hass.callApi throws non-Error objects on HTTP errors, so serialise safely.
       const detail = err?.message ?? (typeof err === 'object' ? JSON.stringify(err) : String(err));
       throw new Error(
-        `Starlink add-on not found (slug: "${ADDON_SLUG}"). ` +
+        `Could not query supervisor for add-on "${ADDON_SLUG}". ` +
         `Is the Starlink GUI add-on installed and running? ` +
         `If the slug is wrong, set 'ingress_path' manually in your card config. ` +
         `Original error: ${detail}`
       );
     }
+
+    // The supervisor response is { result: "ok", data: { ingress_url: "/api/hassio_ingress/<token>/" } }
+    const ingressPath = result?.data?.ingress_url ?? result?.ingress_url;
+
+    if (!ingressPath) {
+      throw new Error(
+        `Supervisor returned no ingress_url for add-on "${ADDON_SLUG}". ` +
+        `Set 'ingress_path' manually in your card config.`
+      );
+    }
+
+    // ingressPath is like "/api/hassio_ingress/abc123/"
+    return `${window.location.origin}${ingressPath.replace(/\/$/, '')}/combined`;
   }
 
   // ── Mount the iframe once we have the URL ────────────────────────────────
