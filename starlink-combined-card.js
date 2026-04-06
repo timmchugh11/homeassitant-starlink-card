@@ -240,7 +240,6 @@ class StarlinkCombinedCardEditor extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._config = {};
     this._addons = [];
-    this._debugInfo = null; // { slug, name, version, state, ingress_url, source } | { error }
   }
 
   set hass(hass) {
@@ -260,82 +259,21 @@ class StarlinkCombinedCardEditor extends HTMLElement {
     } catch (e) {
       this._addons = [];
     }
-
-    // If no slug is configured yet, auto-select the best match and save it
-    if (!this._config.addon_slug && this._addons.length) {
-      const match =
-        this._addons.find((a) => a.slug === ADDON_SLUG) ??
-        this._addons.find((a) =>
-          a.slug?.toLowerCase().includes('starlink') ||
-          a.name?.toLowerCase().includes('starlink')
-        );
-      if (match) {
-        this._config = { ...this._config, addon_slug: match.slug };
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
-        this._fetchDebugInfo(match.slug, 'auto-detected');
-      }
-    }
-
     this._render();
   }
 
-  async _fetchDebugInfo(slug, source) {
-    this._debugInfo = null;
-    this._render();
-    try {
-      const result = await this._hass.connection.sendMessagePromise({
-        type: 'supervisor/api',
-        endpoint: `/addons/${slug}/info`,
-        method: 'get',
-      });
-      const d = result?.data ?? result;
-      this._debugInfo = {
-        source,
-        slug: d.slug ?? slug,
-        name: d.name,
-        version: d.version,
-        state: d.state,
-        ingress_url: d.ingress_url ?? '(none)',
-      };
-    } catch (e) {
-      this._debugInfo = { error: e?.message ?? String(e) };
-    }
-    this._render();
-  }
-    const prevSlug = this._config.addon_slug;
+  setConfig(config) {
     this._config = { ...config };
-    // Fetch debug info if slug changed and we already have hass
-    if (this._hass && this._config.addon_slug && this._config.addon_slug !== prevSlug) {
-      this._fetchDebugInfo(this._config.addon_slug, 'selected');
-    }
     this._render();
   }
 
   _render() {
     const addons = this._addons;
     const selectedSlug = this._config.addon_slug || '';
-    const di = this._debugInfo;
-
-    let debugHtml = '';
-    if (selectedSlug && di === null) {
-      debugHtml = `<div class="debug loading">Loading info…</div>`;
-    } else if (di?.error) {
-      debugHtml = `<div class="debug error">Error: ${di.error}</div>`;
-    } else if (di) {
-      const stateColor = di.state === 'started' ? 'var(--success-color, #4caf50)' : 'var(--warning-color, #ff9800)';
-      debugHtml = `
-        <div class="debug info">
-          <div class="debug-row"><span>Source</span><span>${di.source}</span></div>
-          <div class="debug-row"><span>Slug</span><span>${di.slug}</span></div>
-          <div class="debug-row"><span>Name</span><span>${di.name}</span></div>
-          <div class="debug-row"><span>Version</span><span>${di.version}</span></div>
-          <div class="debug-row"><span>State</span><span style="color:${stateColor}">${di.state}</span></div>
-          <div class="debug-row"><span>Ingress URL</span><span>${di.ingress_url}</span></div>
-        </div>`;
-    }
 
     const options = addons.length
-      ? addons.map((a) =>
+      ? `<option value="">— auto-detect —</option>` +
+        addons.map((a) =>
           `<option value="${a.slug}"${
             a.slug === selectedSlug ? ' selected' : ''
           }>${a.name} (${a.slug})</option>`
@@ -357,23 +295,11 @@ class StarlinkCombinedCardEditor extends HTMLElement {
           font-size: 14px;
         }
         p { font-size: 13px; color: var(--secondary-text-color); margin: 0; }
-        .debug {
-          font-size: 12px;
-          border-radius: 4px;
-          padding: 8px;
-          background: var(--secondary-background-color, rgba(0,0,0,0.05));
-        }
-        .debug.loading { color: var(--secondary-text-color); }
-        .debug.error { color: var(--error-color, red); }
-        .debug-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
-        .debug-row span:first-child { color: var(--secondary-text-color); flex-shrink: 0; }
-        .debug-row span:last-child { word-break: break-all; text-align: right; }
       </style>
       <div class="row">
         <p>Embeds the Starlink GUI <code>/combined</code> page as a card.</p>
         <label for="addon_slug">Add-on</label>
         <select id="addon_slug">${options}</select>
-        ${debugHtml}
         <label for="aspect_ratio">Aspect ratio (optional, default: 100%)</label>
         <input
           id="aspect_ratio"
@@ -396,10 +322,8 @@ class StarlinkCombinedCardEditor extends HTMLElement {
       const newConfig = { ...this._config };
       if (val) {
         newConfig.addon_slug = val;
-        this._fetchDebugInfo(val, 'selected');
       } else {
         delete newConfig.addon_slug;
-        this._debugInfo = null;
       }
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
     });
