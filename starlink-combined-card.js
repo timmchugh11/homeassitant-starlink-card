@@ -137,6 +137,19 @@ class StarlinkCombinedCard extends HTMLElement {
   // ── Resolve the ingress URL ───────────────────────────────────────────────
 
   async _resolveIngressUrl() {
+    // 0. Log all installed apps (add-ons) to help identify the correct slug
+    try {
+      const all = await this._hass.connection.sendMessagePromise({
+        type: 'supervisor/api',
+        endpoint: '/addons',
+        method: 'get',
+      });
+      const addons = all?.data?.addons ?? all?.addons ?? all;
+      console.log('[starlink-combined-card] Installed apps (add-ons):', addons);
+    } catch (e) {
+      console.warn('[starlink-combined-card] Could not list add-ons:', e);
+    }
+
     // 1. Manual override from card config
     if (this._config.ingress_path) {
       const base = this._config.ingress_path.replace(/\/$/, '');
