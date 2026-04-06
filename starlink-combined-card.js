@@ -97,7 +97,8 @@ class StarlinkCombinedCard extends HTMLElement {
       this._ingressUrl = url;
       this._mountIframe(url);
     }).catch((err) => {
-      this._showError(err.message);
+      const detail = err?.message ?? (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      this._showError(detail);
     });
   }
 
@@ -136,11 +137,14 @@ class StarlinkCombinedCard extends HTMLElement {
       // window.location.origin is already the correct base whether local or Nabu Casa.
       return `${window.location.origin}${ingressPath.replace(/\/$/, '')}/combined`;
     } catch (err) {
-      // Re-throw with friendlier context
+      // Re-throw with friendlier context.
+      // hass.callApi throws non-Error objects on HTTP errors, so serialise safely.
+      const detail = err?.message ?? (typeof err === 'object' ? JSON.stringify(err) : String(err));
       throw new Error(
-        `Starlink add-on not found (slug: ${ADDON_SLUG}). ` +
+        `Starlink add-on not found (slug: "${ADDON_SLUG}"). ` +
         `Is the Starlink GUI add-on installed and running? ` +
-        `Original error: ${err.message}`
+        `If the slug is wrong, set 'ingress_path' manually in your card config. ` +
+        `Original error: ${detail}`
       );
     }
   }
