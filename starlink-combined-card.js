@@ -137,41 +137,58 @@ class StarlinkCombinedCard extends HTMLElement {
   // ── Resolve the ingress URL ───────────────────────────────────────────────
 
   async _resolveIngressUrl() {
-    // 0. Log all installed apps (add-ons) to help identify the correct slug
-    try {
-      const all = await this._hass.connection.sendMessagePromise({
-        type: 'supervisor/api',
-        endpoint: '/addons',
-        method: 'get',
-      });
-      const addons = all?.data?.addons ?? all?.addons ?? all;
-      console.log('[starlink-combined-card] Installed apps (add-ons):', addons);
-    } catch (e) {
-      console.warn('[starlink-combined-card] Could not list add-ons:', e);
-    }
-
     // 1. Manual override from card config
     if (this._config.ingress_path) {
       const base = this._config.ingress_path.replace(/\/$/, '');
       return `${window.location.origin}${base}/combined`;
     }
 
-    // 2. Auto-detect via the supervisor WebSocket API.
-    //    Using hass.connection.sendMessagePromise with type "supervisor/api" avoids
-    //    the 401 that the REST proxy (/api/hassio/...) throws for non-admin tokens.
+    // 2. Fetch all installed add-ons and find one matching "starlink"
+    let addons;
+    try {
+      const all = await this._hass.connection.sendMessagePromise({
+        type: 'supervisor/api',
+        endpoint: '/addons',
+        method: 'get',
+      });
+      addons = all?.data?.addons ?? all?.addons ?? [];
+    } catch (err) {
+      const detail = err?.message ?? (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      throw new Error(`Could not list add-ons from supervisor. Original error: ${detail}`);
+    }
+
+    console.log('[starlink-combined-card] Installed add-ons:', addons);
+
+    // Match by configured slug first, then fall back to any add-on whose slug
+    // or name contains "starlink" (case-insensitive).
+    const match =
+      addons.find((a) => a.slug === ADDON_SLUG) ??
+      addons.find((a) =>
+        a.slug?.toLowerCase().includes('starlink') ||
+        a.name?.toLowerCase().includes('starlink')
+      );
+
+    if (!match) {
+      throw new Error(
+        `No Starlink add-on found among installed add-ons. ` +
+        `Check the console for the full list and set 'ingress_path' manually in your card config.`
+      );
+    }
+
+    console.log('[starlink-combined-card] Using add-on:', match.slug, match.name);
+
+    // 3. Fetch the ingress URL for the matched add-on
     let result;
     try {
       result = await this._hass.connection.sendMessagePromise({
         type: 'supervisor/api',
-        endpoint: `/addons/${ADDON_SLUG}/info`,
+        endpoint: `/addons/${match.slug}/info`,
         method: 'get',
       });
     } catch (err) {
       const detail = err?.message ?? (typeof err === 'object' ? JSON.stringify(err) : String(err));
       throw new Error(
-        `Could not query supervisor for add-on "${ADDON_SLUG}". ` +
-        `Is the Starlink GUI add-on installed and running? ` +
-        `If the slug is wrong, set 'ingress_path' manually in your card config. ` +
+        `Could not query supervisor for add-on "${match.slug}". ` +
         `Original error: ${detail}`
       );
     }
@@ -181,7 +198,7 @@ class StarlinkCombinedCard extends HTMLElement {
 
     if (!ingressPath) {
       throw new Error(
-        `Supervisor returned no ingress_url for add-on "${ADDON_SLUG}". ` +
+        `Supervisor returned no ingress_url for add-on "${match.slug}". ` +
         `Set 'ingress_path' manually in your card config.`
       );
     }
@@ -198,13 +215,6 @@ class StarlinkCombinedCard extends HTMLElement {
     const iframe = document.createElement('iframe');
     iframe.src = src;
     iframe.setAttribute('loading', 'lazy');
-    // Needed for the 3-D canvas and pointer events inside the iframe
-    iframe.setAttribute('allow', 'pointer-lock');
-    // Sandbox: allow scripts and same-origin requests; block popups / forms
-    iframe.setAttribute(
-      'sandbox',
-      'allow-scripts allow-same-origin allow-pointer-lock',
-    );
 
     this._wrap.appendChild(iframe);
   }
