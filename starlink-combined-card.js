@@ -159,9 +159,10 @@ class StarlinkCombinedCard extends HTMLElement {
 
     console.log('[starlink-combined-card] Installed add-ons:', addons);
 
-    // Match by configured slug first, then fall back to any add-on whose slug
-    // or name contains "starlink" (case-insensitive).
+    // Match by explicitly configured slug first, then hardcoded slug,
+    // then any add-on whose slug or name contains "starlink".
     const match =
+      addons.find((a) => a.slug === this._config.addon_slug) ??
       addons.find((a) => a.slug === ADDON_SLUG) ??
       addons.find((a) =>
         a.slug?.toLowerCase().includes('starlink') ||
@@ -238,6 +239,27 @@ class StarlinkCombinedCardEditor extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this._config = {};
+    this._addons = [];
+  }
+
+  set hass(hass) {
+    if (this._hass) return; // only load once
+    this._hass = hass;
+    this._loadAddons();
+  }
+
+  async _loadAddons() {
+    try {
+      const all = await this._hass.connection.sendMessagePromise({
+        type: 'supervisor/api',
+        endpoint: '/addons',
+        method: 'get',
+      });
+      this._addons = all?.data?.addons ?? all?.addons ?? [];
+    } catch (e) {
+      this._addons = [];
+    }
+    this._render();
   }
 
   setConfig(config) {
@@ -246,11 +268,23 @@ class StarlinkCombinedCardEditor extends HTMLElement {
   }
 
   _render() {
+    const addons = this._addons;
+    const selectedSlug = this._config.addon_slug || '';
+
+    const options = addons.length
+      ? `<option value="">— auto-detect —</option>` +
+        addons.map((a) =>
+          `<option value="${a.slug}"${
+            a.slug === selectedSlug ? ' selected' : ''
+          }>${a.name} (${a.slug})</option>`
+        ).join('')
+      : `<option value="">Loading…</option>`;
+
     this.shadowRoot.innerHTML = `
       <style>
         .row { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
         label { font-size: 12px; color: var(--secondary-text-color); }
-        input {
+        select, input {
           width: 100%;
           padding: 8px;
           box-sizing: border-box;
@@ -263,8 +297,9 @@ class StarlinkCombinedCardEditor extends HTMLElement {
         p { font-size: 13px; color: var(--secondary-text-color); margin: 0; }
       </style>
       <div class="row">
-        <p>Embeds the Starlink GUI <code>/combined</code> page as a card.
-           The add-on ingress URL is auto-detected — no configuration required.</p>
+        <p>Embeds the Starlink GUI <code>/combined</code> page as a card.</p>
+        <label for="addon_slug">Add-on</label>
+        <select id="addon_slug">${options}</select>
         <label for="aspect_ratio">Aspect ratio (optional, default: 100%)</label>
         <input
           id="aspect_ratio"
@@ -281,6 +316,17 @@ class StarlinkCombinedCardEditor extends HTMLElement {
         />
       </div>
     `;
+
+    this.shadowRoot.querySelector('#addon_slug').addEventListener('change', (e) => {
+      const val = e.target.value;
+      const newConfig = { ...this._config };
+      if (val) {
+        newConfig.addon_slug = val;
+      } else {
+        delete newConfig.addon_slug;
+      }
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    });
 
     this.shadowRoot.querySelector('#aspect_ratio').addEventListener('change', (e) => {
       const val = e.target.value.trim();
