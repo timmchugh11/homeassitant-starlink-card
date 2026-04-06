@@ -1,86 +1,53 @@
-# starlink-card
+# Starlink Combined Card
 
-Custom Home Assistant Lovelace card for displaying Starlink status and network readings on an image-based dashboard.
+A custom Home Assistant Lovelace card that embeds the [Starlink GUI add-on](https://github.com/timmchugh11/haos-addons) `/combined` page (live 3-D obstruction map + real-time stats) directly inside a dashboard card. The ingress URL is resolved automatically so the card works behind Nabu Casa remote access with no extra configuration.
 
-## Install
+## Installation
 
-- URL: `/local/starlink-card/starlink-card.js`
-- Type: `JavaScript Module`
+### HACS (recommended)
 
-## What It Shows
+1. Open **HACS** → **Frontend** → **⋮** → **Custom repositories**.
+2. Add this repository URL and select category **Lovelace**.
+3. Click **Download** on the **Starlink Combined Card** entry.
+4. Reload your browser.
 
-The card displays these configured values:
+### Manual
 
-- Downlink throughput
-- Uplink throughput
-- Ping
-- Ping drop rate
-- Obstruction status
-- Roaming status
-- Stow status
+1. Copy `starlink-combined-card.js` to your `config/www/` folder (or a subfolder).
+2. In Home Assistant go to **Settings** → **Dashboards** → **⋮** → **Resources** and add:
+   - URL: `/local/starlink-combined-card.js`
+   - Type: **JavaScript Module**
+3. Reload your browser.
 
-Each displayed value can be clicked to open the Home Assistant more-info dialog for the configured entity.
+## Requirements
 
-## Visual Editor
-
-The card includes a built-in visual editor in Lovelace.
-
-The editor supports:
-
-- Sensor selection for downlink, uplink, ping, and ping drop
-- Binary sensor selection for obstructed and roaming
-- Switch selection for stow
+The **Starlink GUI** add-on must be installed and running in Home Assistant OS/Supervised. The card auto-detects its ingress path via the supervisor API.
 
 ## Configuration
 
-### Example Config
+### Minimal (auto-detect)
 
 ```yaml
-type: custom:starlink-card
-downlink: sensor.starlink_downlink_throughput
-uplink: sensor.starlink_uplink_throughput
-ping: sensor.starlink_ping
-pingdrop: sensor.starlink_ping_drop_rate
-obstructed: binary_sensor.starlink_obstructed
-roaming: binary_sensor.starlink_roaming_mode
-stow: switch.starlink_stowed
+type: custom:starlink-combined-card
+```
+
+No further configuration is needed in most cases.
+
+### Override ingress path
+
+Only required if auto-detection fails (e.g. non-standard add-on slug or API unavailable):
+
+```yaml
+type: custom:starlink-combined-card
+ingress_path: /api/hassio_ingress/YOUR_TOKEN
 ```
 
 ### Configuration Keys
 
-```yaml
-type: custom:starlink-card
-downlink: sensor.example
-uplink: sensor.example
-ping: sensor.example
-pingdrop: sensor.example
-obstructed: binary_sensor.example
-roaming: binary_sensor.example
-stow: switch.example
-```
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `ingress_path` | `string` | No | Manual override for the Starlink GUI ingress path. |
 
-Expected entity types:
+## Visual Editor
 
-- `downlink`, `uplink`, `ping`, `pingdrop`: `sensor.*`
-- `obstructed`, `roaming`: `binary_sensor.*`
-- `stow`: `switch.*`
-
-## Display Behavior
-
-- Downlink and uplink are shown as `Mbits/s`.
-- Ping is shown in `ms`.
-- Ping drop is shown as a percentage.
-- `obstructed` displays `No Obstructions` when the entity state is `off`, otherwise `Obstructed`.
-- `roaming` displays `Not Roaming` when the entity state is `off`, otherwise `Roaming`.
-- `stow` displays `Stowed` when the switch state is `on`, otherwise `Not Stowed`.
-- Unavailable numeric sensor values display as `unavailable`.
-
-## Layout
-
-The card uses a responsive image layout so the labels scale with the card size.
-
-Current image path:
-
-- `/local/starlink-card/img/mini.png`
-
-If you replace the image, you may also need to adjust the text positions in `starlink-card.js`.
+The card includes a built-in visual editor in the Lovelace UI. The editor exposes the optional `ingress_path` override field — leave it blank to use auto-detection.
