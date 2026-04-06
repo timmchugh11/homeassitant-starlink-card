@@ -36,6 +36,38 @@ class StarlinkCombinedCard extends HTMLElement {
 
   setConfig(config) {
     this._config = { ...config };
+    // Re-apply aspect ratio if the card is already built (editor live-update)
+    if (this._wrap) {
+      this._applyAspectRatio();
+    }
+  }
+
+  // ── Apply aspect ratio to the frame wrapper ───────────────────────────────
+  // Accepts the same format as HA's built-in webpage card:
+  //   "50%"   → height is 50% of width  (default: "100%" = square)
+  //   "56.25" → treated as percent, no % sign needed
+  // Also accepts CSS ratio strings as a convenience:
+  //   "16 / 9" or "16:9" → converted to the equivalent percentage
+  _applyAspectRatio() {
+    const raw = (this._config.aspect_ratio ?? '100%').toString().trim();
+
+    let pct;
+    if (raw.endsWith('%')) {
+      // e.g. "56.25%"
+      pct = parseFloat(raw);
+    } else if (/^\.?\d/.test(raw) && !raw.includes('/') && !raw.includes(':')) {
+      // plain number e.g. "56.25"
+      pct = parseFloat(raw);
+    } else if (raw.includes('/') || raw.includes(':')) {
+      // CSS / ratio string e.g. "16 / 9" or "16:9"
+      const parts = raw.split(/[\/:]/).map((s) => parseFloat(s.trim()));
+      pct = parts.length === 2 && parts[0] ? (parts[1] / parts[0]) * 100 : 100;
+    } else {
+      pct = 100;
+    }
+
+    if (!isFinite(pct) || pct <= 0) pct = 100;
+    this._wrap.style.paddingBottom = `${pct}%`;
   }
 
   getCardSize() {
@@ -65,8 +97,7 @@ class StarlinkCombinedCard extends HTMLElement {
         .frame-wrap {
           position: relative;
           width: 100%;
-          /* 1:1 aspect ratio works well for the 3-D obstruction sphere */
-          aspect-ratio: 1 / 1;
+          height: 0;
         }
         iframe {
           position: absolute;
@@ -91,6 +122,7 @@ class StarlinkCombinedCard extends HTMLElement {
     this.shadowRoot.appendChild(card);
 
     this._wrap = card.querySelector('.frame-wrap');
+    this._applyAspectRatio();
     this._status = card.querySelector('.status');
 
     this._resolveIngressUrl().then((url) => {
@@ -210,6 +242,13 @@ class StarlinkCombinedCardEditor extends HTMLElement {
       <div class="row">
         <p>Embeds the Starlink GUI <code>/combined</code> page as a card.
            The add-on ingress URL is auto-detected — no configuration required.</p>
+        <label for="aspect_ratio">Aspect ratio (optional, default: 100%)</label>
+        <input
+          id="aspect_ratio"
+          type="text"
+          placeholder="56.25% (= 16:9)"
+          value="${this._config.aspect_ratio || ''}"
+        />
         <label for="ingress_path">Ingress path override (optional)</label>
         <input
           id="ingress_path"
@@ -219,6 +258,17 @@ class StarlinkCombinedCardEditor extends HTMLElement {
         />
       </div>
     `;
+
+    this.shadowRoot.querySelector('#aspect_ratio').addEventListener('change', (e) => {
+      const val = e.target.value.trim();
+      const newConfig = { ...this._config };
+      if (val) {
+        newConfig.aspect_ratio = val;
+      } else {
+        delete newConfig.aspect_ratio;
+      }
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    });
 
     this.shadowRoot.querySelector('#ingress_path').addEventListener('change', (e) => {
       const val = e.target.value.trim();
