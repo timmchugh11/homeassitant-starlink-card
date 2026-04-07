@@ -212,43 +212,27 @@ class StarlinkCombinedCard extends HTMLElement {
 
   _mountIframe(src) {
     const iframe = document.createElement('iframe');
-    iframe.setAttribute('loading', 'lazy');
-    iframe.style.visibility = 'hidden';
-
     const warmupSrc = src.replace(/\/combined$/, '/');
-    let switchedToCombined = false;
-
-    const reveal = () => {
-      iframe.style.visibility = 'visible';
-      this._status?.remove();
-    };
-
-    const switchToCombined = () => {
-      if (switchedToCombined) return;
-      switchedToCombined = true;
-      iframe.src = src;
-    };
-
-    iframe.addEventListener('load', () => {
-      if (!switchedToCombined) {
-        switchToCombined();
-        return;
-      }
-      reveal();
-    });
-
-    iframe.addEventListener('error', () => {
-      switchToCombined();
-      reveal();
-    });
-
+    iframe.src = src;
+    iframe.setAttribute('loading', 'lazy');
     this._wrap.appendChild(iframe);
-    iframe.src = warmupSrc;
 
-    window.setTimeout(() => {
-      switchToCombined();
-      reveal();
-    }, 4000);
+    this._warmupIngress(warmupSrc).finally(() => {
+      iframe.src = src;
+      this._status?.remove();
+    });
+  }
+
+  async _warmupIngress(url) {
+    try {
+      await fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+    } catch (err) {
+      // Ignore warm-up failures and let the iframe attempt normal loading.
+    }
   }
 
   // ── Error display ─────────────────────────────────────────────────────────
