@@ -8,6 +8,9 @@ This card requires the [Starlink GUI Home Assistant add-on](https://github.com/t
 
 ## Features
 
+![Starlink card screenshot](img/starlink-card.png)
+![Starlink card screenshot 2](img/starlink-card1.png)
+
 - Embeds the Starlink GUI directly inside a Lovelace card
 - Auto-detects the Starlink add-on from installed Supervisor add-ons
 - Supports manual ingress override if auto-detection is not available
