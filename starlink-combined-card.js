@@ -211,29 +211,13 @@ class StarlinkCombinedCard extends HTMLElement {
   // ── Mount the iframe once we have the URL ────────────────────────────────
 
   _mountIframe(src) {
+    this._status?.remove();
+
     const iframe = document.createElement('iframe');
+    iframe.src = src;
     iframe.setAttribute('loading', 'lazy');
+
     this._wrap.appendChild(iframe);
-
-    this._createIngressSession().finally(() => {
-      iframe.src = src;
-      this._status?.remove();
-    });
-  }
-
-  async _createIngressSession() {
-    try {
-      await fetch('/api/hassio/ingress/session', {
-        method: 'POST',
-        credentials: 'same-origin',
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${this._hass.auth.data.access_token}`,
-        },
-      });
-    } catch (err) {
-      // Ignore session creation failures and let the iframe attempt normal loading.
-    }
   }
 
   // ── Error display ─────────────────────────────────────────────────────────

@@ -96,3 +96,5 @@ The add-on saves those colours in browser `localStorage` and this card will disp
 - This card requires the [Starlink GUI add-on](https://github.com/timmchugh11/haos-addons/tree/main/starlink_gui).
 - Automatic add-on lookup requires Home Assistant Supervisor access.
 - If no matching add-on is found, the card shows an error and you can supply `ingress_path` manually.
+- On some browsers, including iPad Safari, the embedded add-on may return `401 Unauthorized` until the Starlink GUI add-on has been opened once from the Home Assistant side panel in that browser session.
+- Current workaround for those browsers: open the Starlink GUI add-on from the side panel first, then return to the dashboard card.
